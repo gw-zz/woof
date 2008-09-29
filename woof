@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- encoding: utf-8 -*-
 #
 #  woof -- an ad-hoc single file webserver
 #  Copyright (C) 2004 Simon Budig  <simon@budig.de>
@@ -21,6 +22,7 @@
 # Darwin support with the help from Mat Caughron, <mat@phpconsulting.com>
 # Solaris support by Colin Marquardt, <colin.marquardt@zmd.de>
 # FreeBSD support with the help from Andy Gimblett, <A.M.Gimblett@swansea.ac.uk>
+# Cygwin support by Stefan Reichör <stefan@xsteve.at>
 
 import sys, os, popen2, signal, select, socket, getopt, commands
 import urllib, BaseHTTPServer
@@ -35,48 +37,59 @@ compressed = True
 # reached from the outside. Quite nasty problem actually.
 
 def find_ip ():
-   os.environ["PATH"] = "/sbin:/usr/sbin:/usr/local/sbin:" + os.environ["PATH"]
-   platform = os.uname()[0];
+  if sys.platform == "cygwin":
+      ipcfg = os.popen("ipconfig").readlines()
+      for l in ipcfg:
+         try:
+            candidat = l.split(":")[1].strip()
+            if candidat[0].isdigit():
+               break
+         except:
+            pass
+      return candidat
 
-   if platform == "Linux":
+  os.environ["PATH"] = "/sbin:/usr/sbin:/usr/local/sbin:" + os.environ["PATH"]
+  platform = os.uname()[0];
+
+  if platform == "Linux":
       netstat = commands.getoutput ("LC_MESSAGES=C netstat -rn")
       defiface = [i.split ()[-1] for i in netstat.split ('\n')
                                     if i.split ()[0] == "0.0.0.0"]
-   elif platform in ("Darwin", "FreeBSD"):
+  elif platform in ("Darwin", "FreeBSD"):
       netstat = commands.getoutput ("LC_MESSAGES=C netstat -rn")
       defiface = [i.split ()[-1] for i in netstat.split ('\n')
                                     if len(i) > 2 and i.split ()[0] == "default"]
-   elif platform == "SunOS":
+  elif platform == "SunOS":
       netstat = commands.getoutput ("LC_MESSAGES=C netstat -arn")
       defiface = [i.split ()[-1] for i in netstat.split ('\n')
                                     if len(i) > 2 and i.split ()[0] == "0.0.0.0"]
-   else:
+  else:
       print >>sys.stderr, "Unsupported platform; please add support for your platform in find_ip().";
       return None
 
-   if not defiface:
+  if not defiface:
       return None
 
-   if platform == "Linux":
+  if platform == "Linux":
       ifcfg = commands.getoutput ("LC_MESSAGES=C ifconfig "
                                   + defiface[0]).split ("inet addr:")
-   elif platform in ("Darwin", "FreeBSD", "SunOS"):
+  elif platform in ("Darwin", "FreeBSD", "SunOS"):
       ifcfg = commands.getoutput ("LC_MESSAGES=C ifconfig "
                                   + defiface[0]).split ("inet ")
 
-   if len (ifcfg) != 2:
+  if len (ifcfg) != 2:
       return None
-   ip_addr = ifcfg[1].split ()[0]
+  ip_addr = ifcfg[1].split ()[0]
 
    # sanity check
-   try:
+  try:
       ints = [ i for i in ip_addr.split (".") if 0 <= int(i) <= 255]
       if len (ints) != 4:
          return None
-   except ValueError:
+  except ValueError:
       return None
 
-   return ip_addr
+  return ip_addr
 
    
 # Main class implementing an HTTP-Requesthandler, that serves just a single
